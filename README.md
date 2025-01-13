@@ -1,5 +1,5 @@
 # Unlocking Rangeland Analysis Platform (RAP) Data: Five ways to access and explore data 
-#### Welcome slides: <[https://docs.google.com/presentation/d/1tTa9mxHkDI7pzVbN1SVmzQE3E_lCxu__fQBm4hqZZ6c/edit?usp=sharing](https://docs.google.com/presentation/d/1ec2xYVfHzT-hl6lmg_4E4UoCSr4D5KVIBv30BRrupS0/edit?usp=sharing)>
+#### Welcome slides: [https://docs.google.com/presentation/d/1tTa9mxHkDI7pzVbN1SVmzQE3E_lCxu__fQBm4hqZZ6c/edit?usp=sharing](https://docs.google.com/presentation/d/1ec2xYVfHzT-hl6lmg_4E4UoCSr4D5KVIBv30BRrupS0/edit?usp=sharing)
 
 
 ## To get started, download this repository to your computer OR following the Rstudio instructions below: 
