@@ -7,7 +7,7 @@ library(spData)
 # ------------------------- Define parameters for Climate Engine API -------------------------------------
 
 # Define root url for Climate Engine API
-root_url <- 'https://api-dev.climateengine.org/'
+root_url <- 'https://api.climateengine.org/'
 
 # Define Climate Engine API key
 # Request a free API key from Climate Engine at https://support.climateengine.org/article/36-requesting-an-authorization-key-token
