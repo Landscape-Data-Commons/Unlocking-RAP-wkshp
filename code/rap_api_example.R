@@ -13,8 +13,12 @@
 # library(sf)
 # install.packages("httr")
 # library(httr)
+# install.packages("stars")
+# library(stars)
 # remotes::install_github(repo = "landscape-data-commons/trex")
 # library(trex)
+# remotes::install_github(repo = "brownag/rapr")
+# library(rapr)
 
 ##### Parameters ---------------------------------------------------------------
 # This should be the full path to the folder containing your polygons.
@@ -23,7 +27,7 @@
 # I'd recommend always using a full path instead of a relative one,
 # so something that includes :
 # "C:/Users/Nelson/Documents/Projects/SRM_2025/data"
-data_path <- ""
+data_path <- "C:/Users/Nelson/Documents/Projects/other/SRM_2025/Unlocking-RAP-wkshp/data"
 
 # The filename for the shapefile in the data folder.
 # If this were a feature class in a geodatabase, it would be the name of the
@@ -42,6 +46,9 @@ treatment_year <- 2010
 #### THE "EASY" WAY ############################################################
 # The package trex contains a function called fetch_rap() which will take a
 # polygon sf object and return tabular data from RAP.
+
+# The package rapr contains a function called get_rap() which will take a
+# polygon sf object and return raster data within the bounding box.
 
 ##### Reading ------------------------------------------------------------------
 # Read the polygons into the environment so we can work with them.
@@ -81,8 +88,19 @@ production16day_data_all <- trex::fetch_rap(polygons = aoi_polygon,
                                             mask = exclude_croplands_development_water)
 
 
+# And you can snag raster data with rapr::get_rap(), in this case the biomass
+# data for the year after treatment.
+rapr::get_rap(x = aoi_polygon,
+              years = c(treatment_year + 1),
+              product = "vegetation-biomass",
+              filename = file.path(data_path,
+                                   "test_biomass.tif"))
 
+biomass_raster <- stars::read_stars(.x = file.path(data_path,
+                                                   "test_biomass.tif"))
 
+ggplot2::ggplot() +
+  stars::geom_stars(data = biomass_raster)
 
 #### THE INVOLVED WAY ##########################################################
 # This is what the function fetch_rap() is doing internally. You may find that
