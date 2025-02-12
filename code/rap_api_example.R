@@ -103,6 +103,8 @@ ggplot2::ggplot() +
   stars::geom_stars(data = biomass_raster)
 
 #### THE INVOLVED WAY ##########################################################
+
+##### Tabular ------------------------------------------------------------------
 # This is what the function fetch_rap() is doing internally. You may find that
 # for some workflows you'd rather adapt this code than simply use the function.
 
@@ -110,7 +112,7 @@ fetch_rap <- function(polygons,
                       data_type = "cover",
                       mask = TRUE,
                       year = NULL) {
-  #### SANITIZATION ############################################################
+  #### Sanitization ############################################################
   # There are multiple URLs that serve as endpoints for the RAP API. Each one
   # serves a different kind of data. We'll use this to determine which one the
   # user needs to point the query at.
@@ -146,7 +148,7 @@ fetch_rap <- function(polygons,
   }
   
   
-  #### CONVERSION ##############################################################
+  #### Conversion ##############################################################
   # First up, we make sure that the mask and year variables have been added to
   # the polygons and that any other non-geometry variables have been removed
   # to avoid passing things to the API that it can't understand.
@@ -186,7 +188,7 @@ fetch_rap <- function(polygons,
                                          "\"false\"" = "false",
                                          "\"null\"" = "null"))
   
-  #### QUERYING ################################################################
+  #### Querying ################################################################
   # Finally time to submit the query to the API.
   # This will return a JSON with a lot of metadata about the query and data, but
   # most importantly contains the data itself, albeit in a raw format.
@@ -195,7 +197,7 @@ fetch_rap <- function(polygons,
                           body = polygons_geojson,
                           httr::content_type_json())
   
-  #### REFORMATTING ############################################################
+  #### Reformatting ############################################################
   # This takes the data content from the API and converts it from a raw format
   # into a usable list.
   raw_data_list <- httr::content(x = rap_json,
@@ -249,3 +251,67 @@ fetch_rap <- function(polygons,
   # Finally, we spit the data out for the user.
   data
 }
+
+###### Raster -------------------------------------------------------------------
+# This is what's happening inside of rapr::get_rap().
+
+# Get the current bounding box coordinates as a numeric vector to feed to the
+# API.
+current_bbox <- sf::st_bbox(obj = aoi_polygon) |>
+  as.numeric(x = _)
+# The API is expecting them in a different order than sf::st_bbox() returns them
+# so we'll reorder them.
+current_bbox <- current_bbox[c(1, 4, 3, 2)]
+
+# The options for the RAP product that you can download as a raster are
+# "vegetation-biomass" and "vegetation-cover"
+product <- "vegetation-biomass"
+
+# Version 3 is the most recent.
+version <- "v3"
+
+# You can retrieve one year at a time. rapr::get_rap() iterates over years for
+# you if you want multiple at once.
+year <- "2010"
+
+# This is the base URL for where the rasters can be retrieved.
+base_url <- "http://rangeland.ntsg.umt.edu/data/rap/rap-"
+
+# This builds the specific filename for the raster on the server that matches
+# what you're requesting.
+target_filename <- paste0(paste(c(product,
+                                  version,
+                                  year),
+                                collapse = "-"),
+                          ".tif")
+
+# This assembles the URL that points to the target raster on the server.
+target_url <- paste0(base_url, product, "/", version, "/", target_filename)
+
+# This is the filename that the raster will be written to.
+filename <- file.path(data_path,
+                      "biomass_raster_example.tif")
+
+# This asks gdal_utils() to grab the TIF within the bounding box for the polygon
+# that we used. It writes it to storage instead of reading it into the
+# environment, so we'll have to read it in after this step.
+sf::gdal_utils(util = "translate",
+               # The target URL needs the prefix "/vsicurl/" in order to be
+               # understood.
+               source = paste0("/vsicurl/",
+                               target_url),
+               # These are the options to use for handling the raster, including
+               # the bounding box to restrict it to.
+               options = c("-co", "compress=lzw",
+                           "-co", "tiled=yes",
+                           "-co", "bigtiff=yes",
+                           "-projwin", current_bbox),
+               destination = filename)
+
+# Read in the raster.
+biomass_raster <- stars::read_stars(.x = filename)
+
+# Plot the raster.
+ggplot2::ggplot() +
+  stars::geom_stars(data = biomass_raster)
+
