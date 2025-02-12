@@ -1,0 +1,335 @@
+library(ggplot2)
+
+# polygons <- sf::st_read(dsn = "C:/Users/Nelson/Documents/Projects/New_Mexico/Rio_Puerco",
+#                         layer = "Strata_dissolved")
+polygons <- sf::st_read(dsn = "C:/Users/Nelson/Documents/Projects/New_Mexico",
+                        layer = "RGdNNM-big_game_migration_corridor_treatment-2015") |>
+  sf::st_transform(x = _,
+                   crs = "EPSG:4326") |>
+  dplyr::mutate(.data = _,
+                mask = "true",
+                year = "null") |>
+  dplyr::select(.data = _,
+                tidyselect::all_of(c("mask",
+                                     "year",
+                                     "geometry")))
+polygons <- sf::st_read(dsn = data_path,
+                        layer = polygon_filename) |>
+  sf::st_transform(x = _,
+                   crs = "EPSG:4326") |>
+  dplyr::mutate(.data = _,
+                mask = "true",
+                year = "null") |>
+  dplyr::select(.data = _,
+                tidyselect::all_of(c("mask",
+                                     "year",
+                                     "geometry")))
+
+
+polygons <- sf::st_read(dsn = data_path,
+                        layer = polygon_filename)
+
+ggplot() +
+  geom_sf(data = polygons[4,])
+
+polygon_test <- geojsonsf::sf_geojson(sf = polygons[4,],
+                                      atomise = TRUE) |>
+  stringr::str_replace_all(string = _,
+                           pattern = c("\"true\"" = "true",
+                                       "\"null\"" = "2020"))
+polygon_test <- geojsonsf::sf_geojson(sf = polygons,
+                                      atomise = TRUE) |>
+  stringr::str_replace_all(string = _,
+                           pattern = c("\"true\"" = "true",
+                                       "\"null\"" = "null"))
+
+rap_json_test <- httr::RETRY(verb = "POST",
+                             url = "https://us-central1-rap-data-365417.cloudfunctions.net/production16dayV3",
+                             body = polygon_test,
+                             httr::content_type_json())
+
+# Process the returned JSON
+rap_obj_test <- httr::content(x = rap_json_test,
+                              as = "parsed")
+
+# Convert to long dataframe
+df_test <- tibble::enframe(unlist(rap_obj_test$properties$production16day))
+
+fetch_rap <- function(polygons,
+                      data_type = "cover",
+                      mask = TRUE,
+                      year = NULL) {
+  #### SANITIZATION ############################################################
+  # There are multiple URLs that serve as endpoints for the RAP API. Each one
+  # serves a different kind of data. We'll use this to determine which one the
+  # user needs to point the query at.
+  endpoints <- c("cover" = "https://us-central1-rap-data-365417.cloudfunctions.net/coverV3",
+                 "covermeteorology" = "https://us-central1-rap-data-365417.cloudfunctions.net/coverMeteorologyV3",
+                 "production" = "https://us-central1-rap-data-365417.cloudfunctions.net/productionV3",
+                 "production16day" = "https://us-central1-rap-data-365417.cloudfunctions.net/production16dayV3")
+  
+  # Stop and tell the user if they're asking for an unrecognized data type.
+  # Otherwise, move on and we'll reference their selected endpoint when
+  # submitting the query.
+  if (!(tolower(data_type) %in% names(endpoints))) {
+    stop(paste0("'", data_type, "' is not a valid value for data_type. Valid values are: ",
+                paste(names(endpoints),
+                      collapse = ", ")))
+  }
+  
+  # The RAP API can return a single year's data or all available years'.
+  # If you want all years, then the year value in the query should be "null".
+  # If you want only a specific year, it must be 1986-2024.
+  if (is.null(year)) {
+    year <- "null"
+  } else {
+    if (length(year) > 1) {
+      stop("year must be a single four-digit numeric year from 1986 to 2024.")
+    } else if (!(year %in% 1986:2024)) {
+      stop("year must be a single four-digit numeric year from 1986 to 2024.")
+    } else {
+      year <- as.integer(year)
+    }
+  }
+  
+  
+  #### CONVERSION ##############################################################
+  # First up, we make sure that the mask and year variables have been added to
+  # the polygons and that any other, non-geometry variables have been removed
+  # to avoid passing things to the API that it can't understand.
+  polygons <- dplyr::mutate(.data = polygons,
+                            # In R the logical values are represented by TRUE
+                            # and FALSE but the geoJSON format expects true and
+                            # false, so this makes sure that we won't get an
+                            # error in conversion.
+                            mask = tolower(as.character(mask)),
+                            # The year is an integer, but might've come in as
+                            # some other kind of numeric value.
+                            year = year) |>
+    # This removes any variables besides mask, year, and the geometry of the
+    # polygons. This is because other variables will not be understood by the
+    # API but may be present in the polygons provided.
+    dplyr::select(.data = _,
+                  tidyselect::all_of(c("geometry",
+                                       "mask",
+                                       "year"))) 
+  
+  # Before we can convert these into a geoJSON, we need to be absolutely sure
+  # that the coordinate reference system for the polygons is WGS84 because
+  # that's what the API expects the coordinates to be in.
+  polygons_geojson <- sf::st_transform(x = polygons,
+                                       # This is the code for WGS84.
+                                       crs = "EPSG:4326") |>
+    # This creates the geoJSON from the polygons and their associated attributes
+    # (which are just the mask and year variables at this point).
+    geojsonsf::sf_geojson(sf = _,
+                          atomise = TRUE) |>
+    # Because the geoJSON is a character string, we need to make sure that it
+    # hasn't been formatted to indicate the the mask and year values are
+    # themselves character strings because they're supposed to be logical and
+    # integer, respectively.
+    # So this removes any quotation marks around those that would tell the API
+    # that they're character strings.
+    stringr::str_replace_all(string = _,
+                             pattern = c("\"true\"" = "true",
+                                         "\"false\"" = "false",
+                                         "\"null\"" = "null"))
+  
+  #### QUERYING ################################################################
+  # Finally time to submit the query to the API.
+  # This will return a JSON with a lot of metadata about the query and data, but
+  # most importantly contains the data itself, albeit in a raw format.
+  rap_json <- httr::RETRY(verb = "POST",
+                          url = endpoints[tolower(data_type)],
+                          body = polygons_geojson,
+                          httr::content_type_json())
+  
+  #### REFORMATTING ############################################################
+  # This takes the data content from the API and converts it from a raw format
+  # into a usable list.
+  raw_data_list <- httr::content(x = rap_json,
+                                 as = "parsed")
+  
+  # And these steps take the contents of that list and convert it into a data
+  # frame.
+  # The data are in raw_data_list$properties, but include the mask and year
+  # values that we supplied to the API, so we'll remove those to keep only the
+  # values that we asked for.
+  # The [[1]] at the end is to unnest the list from inside another list. It's
+  # lists all the way down.
+  raw_data_list <- raw_data_list$properties[-which(names(raw_data_list$properties) %in% c("mask", "year"))][[1]]
+  raw_data_list <- raw_data_list$properties[[setdiff(x = names(raw_data_list$properties),
+                                                    y = c("mask", "year"))]]
+  
+  # raw_data_list has a bunch of vectors in it. The first one is the variable
+  # names and the rest of them are the values for those variables.
+  # We can go through all of the vectors of values, turn each into its own data
+  # frame, and then bind them all together into a single output data frame.
+  data <- lapply(X = raw_data_list_test[-1],
+                 var_names = unlist(raw_data_list_test[[1]]),
+                 FUN = function(X, var_names){
+                   output <- as.data.frame(x = X)
+                   names(output) <- var_names
+                   output
+                 }) |>
+    dplyr::bind_rows()
+  
+  # Last step is to make sure that the variables are all the data type that we
+  # expect because they're all character strings as a result of the steps we
+  # took above to get them out of the original returned object.
+  # If date is present, it'll be turned from string to date.
+  # If year or doy are present, they'll be turned into integers.
+  # Whatever cover or meterological variables are present will be turned into
+  # numeric.
+  data <- dplyr::mutate(.data = data,
+                        dplyr::across(.cols = tidyselect::any_of(c("date")),
+                                      .fns = as.Date),
+                        dplyr::across(.cols = tidyselect::any_of(c("year",
+                                                                   "doy")),
+                                      .fns = as.integer),
+                        dplyr::across(.cols = tidyselect::any_of(c("AFG",
+                                                                   "PFG",
+                                                                   "HER",
+                                                                   "SHR",
+                                                                   "TRE",
+                                                                   "LTR",
+                                                                   "BGR",
+                                                                   "annualTemp",
+                                                                   "annualPrecip")),
+                                      .fns = as.numeric))
+  
+  # # These are all the possible variables that the API might return, depending on
+  # # which endpoint URL you're using.
+  # data_vars <- c("date",
+  #                "year",
+  #                "doy",
+  #                "AFG",
+  #                "PFG",
+  #                "HER",
+  #                "SHR",
+  #                "TRE",
+  #                "LTR",
+  #                "BGR")
+  # 
+  # # And these steps take the contents of that list and convert it into a data
+  # # frame.
+  # # The data are in raw_data_list$properties, but include the mask and year
+  # # values that we supplied to the API, so we'll remove those to keep only the
+  # # values that we asked for before converting them into a vector. We're
+  # # dropping mask and year instead of picking the specific variable because
+  # # it'll have different names depending on which kind of data we requested.
+  # raw_data_vector <- raw_data_list$properties[-which(names(raw_data_list$properties) %in% c("mask", "year"))] |>
+  #   unlist() |>
+  #   unname()
+  # 
+  # # The vector unfortunately has the variable names in it along with the
+  # # variable values, so we'll figure out which variables are present.
+  # present_data_vars <- data_vars[data_vars %in% raw_data_vector]
+  # 
+  # # We can update raw_data_vector to be only the values without the variable
+  # # names we've identified.
+  # raw_data_vector <- raw_data_vector[!(raw_data_vector %in% present_data_vars)]
+  # 
+  # # We can then make a long data frame with three variables:
+  # # 1) record_id is a unique ID for each record, e.g., each set of values that
+  # # correspond to a single day. That's done below by figuring out how many
+  # # records there are (number of values divided by the number of variables) and
+  # # making a vector of the numbers 1 through the number of records where each of
+  # # those ID numbers is repeated a number of times equal to the number of
+  # # variables. This variable is only here so that we can use it to pivot the
+  # # data from a long format to a tall format. We'll throw it out later.
+  # # 2) variable is the name of the variable in that row, e.g., date, AFG, LTR
+  # # 3) value is the value for that variable for that record, so everything in
+  # # the original raw_data_vector that *wasn't* a variable name.
+  # data_long <- data.frame(record_id = sapply(X = seq_len(length.out = length(raw_data_vector) / length(present_data_vars)),
+  #                                            times = length(present_data_vars),
+  #                                            FUN = rep) |>
+  #                           # sapply() normally returns a vector, but in this
+  #                           # case was returning a matrix so we'll just coerce
+  #                           # that into a vector
+  #                           as.vector(),
+  #                         variable = present_data_vars,
+  #                         value = raw_data_vector)
+  # 
+  # # The last step here is to pivot the data from a long format to a wide format
+  # # because that's generally assumed to be most useful across a broad range of
+  # # applications. It won't be for every use case though!
+  # data <- tidyr::pivot_wider(data = data_long,
+  #                            names_from = variable,
+  #                            values_from = value) |>
+  #   # No need to keep the record_id variable because it was only there to help
+  #   # us pivot the data from long to wide.
+  #   dplyr::select(.data = _,
+  #                 -tidyselect::all_of(c("record_id"))) |>
+  #   # This is making sure that the variables contain the correct type of data
+  #   # because all of them are coming in as character strings.
+  #   # If date is present, it'll be turned from string to date.
+  #   # If year or doy are present, they'll be turned into integers.
+  #   # Whatever cover variables are present will be turned into numeric.
+  #   dplyr::mutate(.data = _,
+  #                 dplyr::across(.cols = tidyselect::any_of(c("date")),
+  #                               .fns = as.Date),
+  #                 dplyr::across(.cols = tidyselect::any_of(c("year",
+  #                                                            "doy")),
+  #                               .fns = as.integer),
+  #                 dplyr::across(.cols = tidyselect::any_of(c("AFG",
+  #                                                            "PFG",
+  #                                                            "HER",
+  #                                                            "SHR",
+  #                                                            "TRE",
+  #                                                            "LTR",
+  #                                                            "BGR")),
+  #                               .fns = as.numeric))
+  
+  # Finally, we spit the data back out at the end of the function.
+  data
+}
+
+test <- fetch_rap(polygons = polygons,
+                  data_type = "cover",
+                  mask = TRUE,
+                  year = 2012)
+test2 <- fetch_rap(polygons = polygons,
+                   data_type = "covermeteorology",
+                   mask = TRUE,
+                   year = NULL)
+
+# First, we get the coordinates of the polygon as a matrix with
+# sf::st_coordinates() and turn it into a data frame to make it easier to handle
+polygon_coordinates <- sf::st_coordinates(x = polygons[4,]) |>
+  as.data.frame()
+
+# A geoJSON lists the coordinate pairs making up the polygon, beginning and
+# ending with the same pair.
+# This will make character strings from all the coordinate pairs to stitch
+# together to make the geoJSON.
+coordinate_strings <- dplyr::mutate(.data = polygon_coordinates,
+                                    # The format for the strings is
+                                    # "[x coordinate, y coordinate]" so
+                                    # we start by pasting those together from
+                                    # the X and Y variables.
+                                    coord_pair_string = paste0("[", X, ",", Y, "]")) |>
+  dplyr::pull(.data = _,
+              coord_pair_string)
+
+# And then all of those can be combined into a single string that repeats the
+# first pair at the end to join close the polygon
+coordinate_string <- paste(c(coordinate_strings,
+                             coordinate_strings[1]),
+                           collapse = ", ")
+
+# Assembling the geoJSON string is easy from here.
+# This string describes the polygon to the API.
+# Note that there's the mask variable being included to tell the server whether
+# to apply the masking or not.
+geojson <- paste('{
+                  "type": "Feature",
+                  "geometry": {
+                    "geodesic": false,
+                    "type": "Polygon",
+                    "coordinates": [ [',
+                 coordinate_string,
+                 '] ] },
+                  "properties": {"mask": ', tolower(as.character(exclude_croplands_development_water)),
+                 ', ", "year": null}
+                }')

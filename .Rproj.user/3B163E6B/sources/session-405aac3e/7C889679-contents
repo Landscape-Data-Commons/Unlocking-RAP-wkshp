@@ -1,0 +1,3 @@
+qrcode::qr_code(x = "https://github.com/Landscape-Data-Commons/Unlocking-RAP-wkshp") |>
+  qrcode::generate_svg(qrcode = _,
+                       filename = "C:/Users/Nelson/Desktop/garbage/qrcode_rap_workshop.svg")
