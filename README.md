@@ -6,7 +6,7 @@ A workshop presented at the Society for Range Management annual meeting 2025.
 ## Downloading the repository
 You can either download the repository as a ZIP file or use Git to clone the repo to your machine. If you have R installed, you'll be able to run the code yourself as the workshop happens, but you can also simply follow along during the workshop without R and install it later when you're ready to use the code.
 
-#### Direct download
+#### Direct download to download as a ZIP file
 1. Navigate to this GitHub repository: https://github.com/Landscape-Data-Commons/Unlocking-RAP-wkshp/.
 2. Navigate to the green <> Code button, and select **Download Zip**.
 3. Save on your computer and unzip the file to the folder you want to work from.
