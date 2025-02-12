@@ -1,4 +1,7 @@
 #### SETUP #####################################################################
+# RAP API documentation page:
+# https://rangelands.app/support/71-api-documentation
+
 ##### Required packages --------------------------------------------------------
 # Uncomment and run these if you're missing the packages.
 # You don't need to use library() if you're specifying the package a function is
