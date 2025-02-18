@@ -5,6 +5,8 @@
 # Processing libraries:
 library(terra) # 1.8-15
 library(httr) # 1.4.7
+library(dplyr, include.only = 'left_join') # 1.1.4
+library(tidyr, include.only = 'pivot_longer') # 1.3.1
 
 # Plotting libraries:
 library(ggplot2) # 3.5.1
@@ -25,7 +27,7 @@ library(bsts) # 0.9.10
 
 # The AOI is 240 acres (97 ha) prescribed fire in Utah.
 # The date of the prescribed fire was September 2010.
-unzip('RAP_wkshp_ROI.zip', exdir = tempdir())
+unzip('./data/RAP_wkshp_ROI.zip', exdir = tempdir())
 aoi <- terra::vect(file.path(tempdir(), 'RAP_wkshp_ROI.shp'))
 # The provided AOI is in EPSG:8827
 # But, the RAP API requires EPSG:4326
